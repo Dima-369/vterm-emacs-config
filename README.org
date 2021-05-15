@@ -4,19 +4,17 @@ vterm is very slow and I prefer adjusting Eshell to my needs.
 
 * fish shell theming and config
 
-Use the boxfish oh-my-fish theme because it looks nice and does not use Powerline.
+Use my pathched boxfish oh-my-fish theme below because it looks nice and does not use Powerline.
 Powerline symbols are not correctly displayed in vterm because of the vterm-toggle directory prompt tracking.
+
+https://github.com/Gira-X/oh-my-fish-improved-theme-boxfish
 
 #+begin_src fish
 omf install boxfish
 omf theme boxfish
 #+end_src
 
-Maybe fix in here sometime: https://github.com/joelwanner/theme-boxfish/blob/master/fish_prompt.fish
-
-It has a bug with the git status indicator where it does not understand when the HEAD is detached though
-
-~(vterm-to-idle-or-new)~ requires configuring fish shell's fish_title function correctly
+~(vterm-to-idle-or-new)~ requires configuring fish shell's ~fish_title~ function correctly
 https://github.com/akermu/emacs-libvterm#vterm-buffer-name-string
 
 * config.fish config
