@@ -16,7 +16,7 @@ Maybe fix in here sometime: https://github.com/joelwanner/theme-boxfish/blob/mas
 
 It has a bug with the git status indicator where it does not understand when the HEAD is detached though
 
-(vterm-to-idle-or-new) requires configuring fish shell's fish_title function correctly
+~(vterm-to-idle-or-new)~ requires configuring fish shell's fish_title function correctly
 https://github.com/akermu/emacs-libvterm#vterm-buffer-name-string
 
 * config.fish config
