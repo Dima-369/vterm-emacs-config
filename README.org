@@ -19,6 +19,41 @@ It has a bug with the git status indicator where it does not understand when the
 (vterm-to-idle-or-new) requires configuring fish shell's fish_title function correctly
 https://github.com/akermu/emacs-libvterm#vterm-buffer-name-string
 
+* config.fish config
+
+https://github.com/akermu/emacs-libvterm#directory-tracking-and-prompt-tracking
+
+#+begin_src fish
+function vterm_prompt_end;
+    vterm_printf '51;A'(whoami)'@'(hostname)':'(pwd)
+end
+
+functions --copy fish_prompt vterm_old_fish_prompt
+
+function fish_prompt --description 'Write out the prompt; do not replace this. Instead, put this at end of your file.'
+    printf "%b" (string join "\n" (vterm_old_fish_prompt))
+    vterm_prompt_end
+end
+
+function vterm_printf;
+    if begin; [  -n "$TMUX" ]  ; and  string match -q -r "screen|tmux" "$TERM"; end
+        # tell tmux to pass the escape sequences through
+        printf "\ePtmux;\e\e]%s\007\e\\" "$argv"
+    else if string match -q -- "screen*" "$TERM"
+        # GNU screen (screen, screen-256color, screen-256color-bce)
+        printf "\eP\e]%s\007\e\\" "$argv"
+    else
+        printf "\e]%s\e\\" "$argv"
+    end
+end
+
+# in combination with (setq vterm-buffer-name-string "vterm %s")
+# the vterm buffer is renamed to the current command which can be used to check if vterm is idle or busy 
+function fish_title
+    status current-command
+end
+#+end_src
+
 * emacs lisp config
 
 #+begin_src emacs-lisp
