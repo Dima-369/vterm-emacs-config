@@ -1,0 +1,198 @@
+My now unused hackish [[https://github.com/akermu/emacs-libvterm][vterm]] config (switched to Eshell)
+
+vterm is very slow and I prefer adjusting Eshell to my needs.
+
+* fish shell theming and config
+
+Use the boxfish oh-my-fish theme because it looks nice and does not use Powerline.
+Powerline symbols are not correctly displayed in vterm because of the vterm-toggle directory prompt tracking.
+
+#+begin_src fish
+omf install boxfish
+omf theme boxfish
+#+end_src
+
+Maybe fix in here sometime: https://github.com/joelwanner/theme-boxfish/blob/master/fish_prompt.fish
+
+It has a bug with the git status indicator where it does not understand when the HEAD is detached though
+
+(vterm-to-idle-or-new) requires configuring fish shell's fish_title function correctly
+https://github.com/akermu/emacs-libvterm#vterm-buffer-name-string
+
+* emacs lisp config
+
+#+begin_src emacs-lisp
+(defun vterm-kill-idle ()
+  (let ((buf (current-buffer))
+        (buffers (vterm-get-idle-buffer-names))
+        (kill-buffer-query-functions nil)) ; to not query because the buffer has a running process
+    (when (> (length buffers) 0)
+      (mapc (lambda (x) (kill-buffer x)) buffers)
+      (message "Killed %s idle vterm buffer%s"
+               (length buffers)
+               (if (= (length buffers) 1) "" "s"))
+      (switch-to-buffer buf)
+      ;; delay to kill the processes for (restart-emacs)
+      (sleep-for 0.12))))
+
+(defun mu4e-kill-process-for-emacs-exit ()
+  (let ((buf (current-buffer))
+        (b (get-buffer "*check-email-manually-process*"))
+        (kill-buffer-query-functions nil))
+    (switch-to-buffer b)
+    (kill-process-ignore-errors)
+    (kill-buffer)
+    (switch-to-buffer buf)))
+
+(defun restart-emacs-kill-idle-vterm-and-offlineimap ()
+  (interactive)
+  (vterm-kill-idle)
+  (mu4e-kill-process-for-emacs-exit)
+  ;; don't use (run-at-time) because it will prompt in a GUI window about unsaved changes
+  (restart-emacs))
+
+(defun vterm-send-escape ()
+  (interactive)
+  (vterm-send-key (kbd "C-w")))
+
+;; see https://github.com/akermu/emacs-libvterm/blob/master/vterm.el#L540
+(add-hook 'vterm-mode-hook
+          (lambda ()
+            ;; exiting from vim just as a safeguard, but vim should not be used in vterm
+            (define-key vterm-mode-map (kbd "<s-a>") #'vterm-send-escape)
+            (define-key vterm-mode-map (kbd "<s-return>") #'xah-fly-command-mode-activate)
+            ;; by default the escape key is sent to the terminal otherwise
+            (define-key vterm-mode-map (kbd "<escape>") #'top-level-or-bury-buffers)))
+
+;; taken from vterm-toggle-show and simplified a lot (like dropping Tramp support)
+;; https://github.com/jixiuf/vterm-toggle/blob/master/vterm-toggle.el
+(defun vterm-send-cd (requested-dir)
+  (xah-fly-insert-mode-activate)
+  (let ((dir (expand-file-name requested-dir)))
+    (unless (equal default-directory dir)
+      (vterm-send-C-a)
+      (vterm-send-C-k)
+      (sleep-for 0.01)
+      (if (vterm-cursor-in-command-buffer-p)
+          (progn
+            (vterm-send-string (concat "cd '" dir "'"))
+            (vterm-send-return))
+        (message "Should not happen :>")))))
+
+(defun vterm-send-cd-old (dir)
+  (xah-fly-insert-mode-activate)
+  (vterm-send-C-u) ; clearing the input shell line
+  (vterm-send-string (concat "cd '" dir "'"))
+  (vterm-send-return))
+
+(defun vterm-get-idle-buffer-names ()
+  (let ((filtered (seq-remove 'null (mapcar
+                                     (lambda (x)
+                                       (if (string-match "^vterm fish" (buffer-name x))
+                                           (buffer-name x)
+                                         nil))
+                                     (buffer-list)))))
+    (sort filtered (lambda (x y) (string< x y)))))
+
+(defun vterm-to-idle-or-new (dir)
+  (let ((buffers (vterm-get-idle-buffer-names)))
+    (if (= 0 (length buffers))
+        (progn
+          (vterm)
+          (vterm-send-cd dir))
+      (switch-to-buffer (car buffers))
+      (vterm-send-cd dir))))
+
+(defun vterm-to-idle-or-new-no-cd ()
+  (let ((buffers (vterm-get-idle-buffer-names)))
+    (if (= 0 (length buffers))
+        (vterm)
+      (switch-to-buffer (car buffers)))))
+
+(defun vterm-toggle-to-idle-from-hammerspoon()
+  (interactive)
+  (xah-fly-insert-mode-activate)
+  (unless (string= major-mode "vterm-mode")
+    (vterm-to-idle-or-new-no-cd)))
+
+(defun vterm-toggle-to-idle-or-bury ()
+  (interactive)
+  (if (string= major-mode "vterm-mode")
+      (bury-buffer)
+    (vterm-to-idle-or-new default-directory)))
+
+(defun vterm-clear-prompt ()
+  (interactive)
+  (vterm-send-C-e)
+  (vterm-send-C-u)
+  (xah-fly-insert-mode-activate))
+
+(defun vterm-enter-insert-mode ()
+  (interactive)
+  (xah-fly-insert-mode-activate))
+
+(defun vterm-return-to-insert ()
+  (interactive)
+  (vterm-send-return)
+  (xah-fly-insert-mode-activate))
+
+(defun vterm-go-up ()
+  (interactive)
+  ;; a larger time is required to actually move the cursor
+  (run-at-time 0.18 nil
+               (lambda () (previous-line))))
+
+(defun vterm-clear-prompt-better ()
+  (interactive)
+  (call-interactively #'vterm-send-C-e)
+  (dotimes (i 9)
+    (vterm-send-C-u))
+  ;; takes long so we blink
+  (beacon-blink))
+
+;; vterm-undo does nothing, so don't bother binding it
+(pretty-hydra-define hydra-vterm
+  (:foreign-keys warn :title "vterm" :quit-key "<escape>")
+
+  ("Special"
+   (("a" counsel-M-x "M-x" :color blue)
+    ("q" vterm-clear-prompt-better "Clear prompt" :color blue)
+    ("u" vterm-enter-insert-mode "Insert mode" :color blue)
+    
+    ("=" bury-buffer "Hide vterm" :color blue)
+    ("m" bury-buffer "Hide vterm" :color blue)
+    
+    ("<return>" vterm-return-to-insert "Return" :color blue)
+    ("<up>" vterm-send-up "Up")
+    ("<down>" vterm-send-down "Down")
+    ("z" vterm-send-C-c "Send C-c")
+    ("k" vterm-yank "Paste"))
+
+   "Navigation"
+   (("d" vterm-send-C-a "Start")
+    ("s" vterm-send-C-e "End")
+
+    ("g" vterm-send-M-b "Word backward")
+    ("r" vterm-send-M-f "Word forward")
+
+    ("c" vterm-go-up "Up" :color blue)
+    ("t" vterm-send-down "Down")
+    ("h" vterm-send-left "Left")
+    ("n" vterm-send-right "Right"))
+
+   "Actions"
+   (("e" vterm-send-backspace "Backspace")
+    ("(" vterm-send-delete "Delete")
+    ("p" vterm-send-M-d "Word delete forward"))))
+
+(use-package vterm
+  :config
+  (setq vterm-buffer-name-string "vterm %s"))
+
+;; for defuns related to detecting if the prompt is idle or not
+;; requires fish shell setup
+(use-package vterm-toggle)
+#+end_src
+
+
+
